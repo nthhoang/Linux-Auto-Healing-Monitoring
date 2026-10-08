@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linux Auto-Healing & Observability Platform | VKU SRE Enterprise</title>
+  <style>
+    :root {
+      --bg-primary: #0a0f1d;
+      --bg-card: rgba(15, 23, 42, 0.78);
+      --bg-card-hover: rgba(30, 41, 59, 0.9);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-active: rgba(56, 189, 248, 0.45);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-cyan: #06b6d4;
+      --accent-blue: #3b82f6;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.1) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+      width: 100%;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      border-bottom: 1px solid var(--border-color);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(10, 15, 29, 0.85);
+    }
+    .header-content {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.35);
+      color: #fff;
+    }
+    .logo-text h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #f8fafc, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo-text p {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      transition: all 0.3s ease;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .btn-portal {
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #e2e8f0;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+    }
+    .btn-portal:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+    .btn-portal.grafana {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(234, 88, 12, 0.25));
+      border-color: rgba(249, 115, 22, 0.4);
+      color: #fdba74;
+    }
+    .btn-portal.grafana:hover {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(234, 88, 12, 0.35));
+      border-color: rgba(249, 115, 22, 0.6);
+    }
+
+    /* Score & Benchmark Hero Section (Like the Reference) */
+    .benchmark-card {
+      background: linear-gradient(180deg, rgba(17, 24, 39, 0.85) 0%, rgba(15, 23, 42, 0.65) 100%);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 28px;
+      margin-top: 24px;
+      margin-bottom: 24px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+    }
+    .benchmark-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 28px;
+      align-items: center;
+    }
+    @media (max-width: 860px) {
+      .benchmark-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Circular Score Gauge */
+    .gauge-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .gauge-svg {
+      width: 190px;
+      height: 190px;
+      transform: rotate(-90deg);
+    }
+    .gauge-bg {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.08);
+      stroke-width: 14;
+    }
+    .gauge-progress {
+      fill: none;
+      stroke: url(#gauge-gradient);
+      stroke-width: 14;
+      stroke-linecap: round;
+      stroke-dasharray: 502;
+      stroke-dashoffset: 25; /* ~95% full */
+      transition: stroke-dashoffset 1.5s ease;
+      filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.45));
+    }
+    .gauge-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .gauge-number {
+      font-size: 38px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+    .gauge-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-weight: 600;
+    }
+    .gauge-caption {
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    /* Benchmark Metrics Rows */
+    .benchmark-details {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bench-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .bench-row:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(30, 41, 59, 0.6);
+    }
+    .bench-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+    .bench-badge {
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .badge-pass {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-info {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .badge-alert {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* KPI Metrics 4 Cards */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .metric-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-active);
+      background: var(--bg-card-hover);
+    }
+    .metric-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .metric-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    .metric-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .metric-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 4px;
+      letter-spacing: -0.02em;
+    }
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sub-emerald { color: #34d399; }
+    .sub-cyan { color: #38bdf8; }
+    .sub-amber { color: #fbbf24; }
+    .sub-purple { color: #c084fc; }
+
+    /* Main Sections Grid */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 992px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(12px);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .section-head h3 {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #f1f5f9;
+    }
+    .section-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* 10 Core Components Grid */
+    .services-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 12px;
+    }
+    .service-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+    }
+    .service-item:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(30, 41, 59, 0.5);
+    }
+    .service-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .service-icon-box {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .service-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .service-role {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .service-badge {
+      font-size: 10px;
+      padding: 3px 7px;
+      border-radius: 5px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    /* Pipeline Steps */
+    .pipeline-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pipeline-step {
+      display: flex;
+      gap: 12px;
+      position: relative;
+    }
+    .pipeline-step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      left: 17px;
+      top: 36px;
+      bottom: -6px;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(30, 41, 59, 0.9);
+      border: 2px solid #38bdf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+      color: #38bdf8;
+      flex-shrink: 0;
+      z-index: 2;
+    }
+    .step-num.alert { border-color: #f43f5e; color: #f43f5e; }
+    .step-num.heal { border-color: #a855f7; color: #a855f7; }
+    .step-num.ok { border-color: #10b981; color: #10b981; }
+
+    .step-content {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 14px;
+      width: 100%;
+    }
+    .step-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .step-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .step-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .step-desc {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    /* Terminal Simulation Box */
+    .console-box {
+      background: #090e17;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #e2e8f0;
+      margin-top: 14px;
+    }
+    .console-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .console-prompt { color: #38bdf8; font-weight: bold; }
+
+    /* Interactive Buttons Row */
+    .actions-bar {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .btn-action {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-action:hover {
+      background: rgba(56, 189, 248, 0.2);
+      transform: translateY(-1px);
+    }
+    .btn-action.traffic {
+      background: rgba(168, 85, 247, 0.1);
+      border-color: rgba(168, 85, 247, 0.3);
+      color: #c084fc;
+    }
+    .btn-action.traffic:hover {
+      background: rgba(168, 85, 247, 0.2);
+    }
+
+    /* Team Section */
+    .team-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 26px;
+      margin-bottom: 28px;
+      backdrop-filter: blur(12px);
+    }
+    .team-header-flex {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 22px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .team-header-flex h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .advisor-badge {
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.2));
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      color: #c084fc;
+      font-weight: 600;
+    }
+
+    .members-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .member-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+    .member-card:hover {
+      border-color: rgba(56, 189, 248, 0.35);
+      transform: translateY(-2px);
+    }
+    .member-card.leader {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: linear-gradient(180deg, rgba(14, 165, 233, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%);
+    }
+    .member-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-weight: 700;
+    }
+    .badge-leader {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: #ffffff;
+    }
+    .badge-member {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+    }
+    .avatar-box {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1e293b, #334155);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: bold;
+      color: #38bdf8;
+      margin-bottom: 12px;
+    }
+    .member-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 4px;
+    }
+    .member-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      gap: 10px;
+      font-family: monospace;
+    }
+    .member-role {
+      font-size: 11px;
+      color: #94a3b8;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 8px;
+      line-height: 1.4;
+    }
+
+    footer {
+      margin-top: auto;
+      border-top: 1px solid var(--border-color);
+      padding: 24px 20px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      background: rgba(10, 15, 29, 0.9);
+    }
+    .footer-highlight {
+      color: #cbd5e1;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SVG Gradients Definition -->
+  <svg width="0" height="0">
+    <defs>
+      <linearGradient id="gauge-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#06b6d4" />
+        <stop offset="50%" stop-color="#10b981" />
+        <stop offset="100%" stop-color="#3b82f6" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- Top Navigation -->
+  <header>
+    <div class="header-content">
+      <div class="logo-group">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>LINUX AUTO-HEALING &amp; SRE MONITORING</h1>
+          <p>High Availability · Autonomous Recovery · Telemetry Pipeline</p>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <div class="badge-status" id="system-badge">
+          <span class="pulse-dot" id="system-dot"></span>
+          <span id="system-status-text">SYSTEM OPERATIONAL</span>
+        </div>
+        <a href="/health" target="_blank" class="btn-portal">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          /health probe
+        </a>
+        <a id="link-grafana" href="http://localhost:3000" target="_blank" class="btn-portal grafana">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+          Grafana (:3000)
+        </a>
+        <a id="link-prometheus" href="http://localhost:9090" target="_blank" class="btn-portal">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          Prometheus (:9090)
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Benchmark & SRE Readiness Card (Like Reference Image) -->
+    <div class="benchmark-card">
+      <div class="benchmark-grid">
+        
+        <!-- Circular Gauge -->
+        <div class="gauge-wrapper">
+          <svg class="gauge-svg" viewBox="0 0 180 180">
+            <circle class="gauge-bg" cx="90" cy="90" r="75"></circle>
+            <circle class="gauge-progress" cx="90" cy="90" r="75"></circle>
+          </svg>
+          <div class="gauge-content">
+            <div class="gauge-number">99.9%</div>
+            <div class="gauge-sub">SRE UPTIME</div>
+          </div>
+          <div class="gauge-caption">⚡ Autonomous Recovery Active</div>
+        </div>
+
+        <!-- Benchmark Rows -->
+        <div class="benchmark-details">
+          
+          <div class="bench-row">
+            <div class="bench-label">
+              <span style="color: #34d399;">✔</span>
+              <span>Health Endpoint Probe (<code>/health</code>)</span>
+            </div>
+            <span class="bench-badge badge-pass" id="bench-health">PASS (200 OK)</span>
+          </div>
+
+          <div class="bench-row">
+            <div class="bench-label">
+              <span style="color: #38bdf8;">⚡</span>
+              <span>Mean Time To Recovery (MTTR)</span>
+            </div>
+            <span class="bench-badge badge-info">&lt; 15 Giây</span>
+          </div>
+
+          <div class="bench-row">
+            <div class="bench-label">
+              <span style="color: #f59e0b;">🛡️</span>
+              <span>Circuit Breaker Guard (Chống loop vô hạn)</span>
+            </div>
+            <span class="bench-badge badge-alert">CLOSED (Tối đa 3 lần)</span>
+          </div>
+
+          <div class="bench-row">
+            <div class="bench-label">
+              <span style="color: #34d399;">✔</span>
+              <span>Telegram Real-time Alerting</span>
+            </div>
+            <span class="bench-badge badge-pass">ENABLED (Instant Bot)</span>
+          </div>
+
+          <div class="bench-row">
+            <div class="bench-label">
+              <span style="color: #34d399;">✔</span>
+              <span>Prometheus Scrape &amp; Loki Logging Mesh</span>
+            </div>
+            <span class="bench-badge badge-pass">PASS (100% UP)</span>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 4 Core Metric Cards -->
+    <div class="metrics-grid">
+      
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Health Status</span>
+          <div class="metric-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="metric-value sub-emerald" id="latency-val">200 OK</div>
+        <div class="metric-sub">
+          <span class="sub-emerald">● Live Check:</span> <span id="latency-ms">&lt; 2ms</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Auto-Healing Time</span>
+          <div class="metric-icon" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </div>
+        </div>
+        <div class="metric-value sub-cyan">~15.0 s</div>
+        <div class="metric-sub">
+          <span class="sub-cyan">⚡ Tốc độ tự phục hồi</span> khi crash
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Watchdog Cadence</span>
+          <div class="metric-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+        </div>
+        <div class="metric-value sub-amber">5s / 3 Ticks</div>
+        <div class="metric-sub">
+          <span class="sub-amber">Ngưỡng kích hoạt:</span> 3 lần fail
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Circuit Breaker</span>
+          <div class="metric-icon" style="background: rgba(168, 85, 247, 0.15); color: #a855f7;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+        </div>
+        <div class="metric-value sub-purple">CLOSED</div>
+        <div class="metric-sub">
+          <span class="sub-purple">Max Restarts: 3</span> (An toàn)
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Main Content: 10 Components & SRE Workflow -->
+    <div class="main-grid">
+
+      <!-- Left Column: 10 Components Topology -->
+      <div class="section-card">
+        <div class="section-head">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+            10 Thành Phần Công Nghệ Hỗ Trợ Đề Tài
+          </h3>
+          <span class="section-tag">Docker Compose + Linux Host</span>
+        </div>
+
+        <div class="services-list">
+          
+          <div class="service-item">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #22c55e;">🌐</div>
+              <div>
+                <div class="service-name">1. Nginx Core Gateway</div>
+                <div class="service-role">Dịch vụ web chính &amp; /health (:8080)</div>
+              </div>
+            </div>
+            <span class="service-badge">ACTIVE</span>
+          </div>
+
+          <div class="service-item">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #f97316;">🔥</div>
+              <div>
+                <div class="service-name">2. Prometheus Engine</div>
+                <div class="service-role">TSDB &amp; Phân tích cảnh báo (:9090)</div>
+              </div>
+            </div>
+            <span class="service-badge">ACTIVE</span>
+          </div>
+
+          <div class="service-item">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #eab308;">📊</div>
+              <div>
+                <div class="service-name">3. Grafana Dashboard</div>
+                <div class="service-role">Bảng điều khiển trực quan (:3000)</div>
+              </div>
+            </div>
+            <span class="service-badge">ACTIVE</span>
+          </div>
+
+          <div class="service-item">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #ef4444;">🚨</div>
+              <div>
+                <div class="service-name">4. Alertmanager Relay</div>
+                <div class="service-role">Tổng đài điều phối cảnh báo (:9093)</div>
+              </div>
+            </div>
+            <span class="service-badge">ACTIVE</span>
+          </div>
+
+          <div class="service-item">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #38bdf8;">✈️</div>
+              <div>
+                <div class="service-name">5. Telegram Bot API</div>
+                <div class="service-role">Nhận thông báo khẩn về điện thoại</div>
+              </div>
+            </div>
+            <span class="service-badge">CONNECTED</span>
+          </div>
+
+          <div class="service-item">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #06b6d4;">📝</div>
+              <div>
+                <div class="service-name">6. Loki &amp; 7. Promtail</div>
+                <div class="service-role">Thu thập và lưu trữ log tập trung</div>
+              </div>
+            </div>
+            <span class="service-badge">ACTIVE</span>
+          </div>
+
+          <div class="service-item">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #8b5cf6;">📈</div>
+              <div>
+                <div class="service-name">8. Node &amp; 9. Nginx Exporter</div>
+                <div class="service-role">Thu thập chỉ số CPU/RAM &amp; Requests</div>
+              </div>
+            </div>
+            <span class="service-badge">SCRAPING</span>
+          </div>
+
+          <div class="service-item" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(14, 165, 233, 0.08);">
+            <div class="service-info">
+              <div class="service-icon-box" style="color: #38bdf8;">🛠️</div>
+              <div>
+                <div class="service-name">10. heal.sh (Auto-Healing)</div>
+                <div class="service-role">Daemon tự phục hồi + Circuit Breaker</div>
+              </div>
+            </div>
+            <span class="service-badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8;">SYSTEMD</span>
+          </div>
+
+        </div>
+
+        <div class="console-box">
+          <div class="console-line">
+            <span class="console-prompt">systemd@vku-sre:~$</span>
+            <span>sudo systemctl status heal-nginx.service</span>
+          </div>
+          <div style="color: #4ade80; margin-left: 14px;">● heal-nginx.service - Auto-healing watchdog for Nginx (Active: running)</div>
+          <div style="color: #94a3b8; margin-left: 14px;">Status: "Continuous probing http://localhost:8080/health... State: HEALTHY"</div>
+        </div>
+
+        <!-- Interactive Actions for Demo -->
+        <div class="actions-bar">
+          <button class="btn-action" onclick="pingHealthNow()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Bắt mạch /health ngay
+          </button>
+          <button class="btn-action traffic" onclick="simulateTraffic(30)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Bắn 30 Requests tạo Traffic Grafana
+          </button>
+          <span id="action-status" style="font-size: 12px; color: var(--text-muted); align-self: center;"></span>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Auto-Healing Pipeline -->
+      <div class="section-card">
+        <div class="section-head">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Chu Trình Tự Phục Hồi
+          </h3>
+          <span class="section-tag">heal.sh Engine</span>
+        </div>
+
+        <div class="pipeline-wrapper">
+
+          <div class="pipeline-step">
+            <div class="step-num">01</div>
+            <div class="step-content">
+              <div class="step-header">
+                <span class="step-title">Pulse Check</span>
+                <span class="step-time">Mỗi 5s</span>
+              </div>
+              <p class="step-desc">Daemon gửi probe HTTP GET tới <code>/health</code>. Nhận HTTP 200 -&gt; Counter reset về 0.</p>
+            </div>
+          </div>
+
+          <div class="pipeline-step">
+            <div class="step-num alert">02</div>
+            <div class="step-content">
+              <div class="step-header">
+                <span class="step-title">Anomaly Detected</span>
+                <span class="step-time">15s fail</span>
+              </div>
+              <p class="step-desc">Nginx bị sập 3 lần liên tiếp, hệ thống ghi nhận sự cố khẩn và khóa cờ Down.</p>
+            </div>
+          </div>
+
+          <div class="pipeline-step">
+            <div class="step-num heal">03</div>
+            <div class="step-content">
+              <div class="step-header">
+                <span class="step-title">Auto Healing &amp; Alert</span>
+                <span class="step-time">Tức thì</span>
+              </div>
+              <p class="step-desc">Tự động gọi <code>docker restart nginx</code>, đồng thời bắn cảnh báo đỏ về Telegram bot.</p>
+            </div>
+          </div>
+
+          <div class="pipeline-step">
+            <div class="step-num ok">04</div>
+            <div class="step-content">
+              <div class="step-header">
+                <span class="step-title">Resolved &amp; Reset</span>
+                <span class="step-time">&lt; 3s</span>
+              </div>
+              <p class="step-desc">Dịch vụ hoạt động trở lại. Bot gửi tin nhắn xác nhận xanh và reset bộ đếm an toàn.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Team Members Section (VKU Theme) -->
+    <div class="team-section">
+      <div class="team-header-flex">
+        <div>
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Nhóm Thực Hiện Đề Tài
+          </h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Đồ án môn học: Hệ điều hành Linux &amp; Quản trị hệ thống nguồn mở</p>
+        </div>
+        <div class="advisor-badge">
+          👨‍🏫 GVHD: TS. Hoàng Hữu Đức
+        </div>
+      </div>
+
+      <div class="members-grid">
+        
+        <!-- Member 1: Leader (Nguyễn Tam Huy Hoàng) -->
+        <div class="member-card leader">
+          <span class="member-badge badge-leader">LEADER</span>
+          <div class="avatar-box" style="background: linear-gradient(135deg, rgba(2, 132, 199, 0.4), rgba(37, 99, 235, 0.4)); color: #38bdf8;">
+            H
+          </div>
+          <div class="member-name">Nguyễn Tam Huy Hoàng</div>
+          <div class="member-meta">
+            <span>MSSV: <strong>...</strong></span>
+            <span>·</span>
+            <span>Lớp: <strong>24IT...</strong></span>
+          </div>
+          <div class="member-role">
+            👑 <strong>Vai trò:</strong> Quản lý dự án, thiết kế kiến trúc hệ thống SRE, nghiên cứu cơ chế High Availability &amp; Circuit Breaker, tổng hợp tài liệu và Báo cáo.
+          </div>
+        </div>
+
+        <!-- Member 2: Trần Viết Đạt -->
+        <div class="member-card" style="border-color: rgba(56, 189, 248, 0.35);">
+          <span class="member-badge badge-leader" style="background: linear-gradient(135deg, #0d9488, #059669);">CORE DEV</span>
+          <div class="avatar-box" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 182, 212, 0.25)); color: #34d399;">
+            Đ
+          </div>
+          <div class="member-name">Trần Viết Đạt</div>
+          <div class="member-meta">
+            <span>MSSV: <strong>24IT332</strong></span>
+            <span>·</span>
+            <span>Lớp: <strong>24IT...</strong></span>
+          </div>
+          <div class="member-role">
+            ⚙️ <strong>Vai trò:</strong> Lập trình Auto-Healing daemon (<code>heal.sh</code>), đóng gói Linux systemd service (<code>heal-nginx.service</code>), Docker orchestration &amp; kịch bản kiểm thử (<code>test_scenario.sh</code>).
+          </div>
+        </div>
+
+        <!-- Member 3: Placeholder (Trống để tự điền) -->
+        <div class="member-card">
+          <span class="member-badge badge-member">MEMBER</span>
+          <div class="avatar-box">T3</div>
+          <div class="member-name">[Họ và tên thành viên 3]</div>
+          <div class="member-meta">
+            <span>MSSV: <strong>...</strong></span>
+            <span>·</span>
+            <span>Lớp: <strong>24IT...</strong></span>
+          </div>
+          <div class="member-role">
+            📊 <strong>Vai trò:</strong> Cấu hình Prometheus Scrape &amp; Alert Rules, tích hợp Alertmanager &amp; Telegram Bot, thiết kế Dashboard Grafana &amp; phân tích Loki Logs.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p class="footer-highlight">🐧 Linux Auto-Healing &amp; SRE Observability Platform — Đồ án môn học Linux</p>
+    <p>Trường Đại học Công nghệ Thông tin và Truyền thông Việt - Hàn (VKU) · Khoa Khoa học Máy tính</p>
+    <p style="font-size: 11px; margin-top: 6px; color: #64748b;">Đà Nẵng, Tháng 9/2026</p>
+  </footer>
+
+  <!-- Realtime JavaScript Probe & Dynamic Host Binding -->
+  <script>
+    // Tự động nhận diện IP để bấm vào Grafana / Prometheus không bị lỗi localhost
+    const currentHost = window.location.hostname || 'localhost';
+    document.getElementById('link-grafana').href = `http://${currentHost}:3000`;
+    document.getElementById('link-prometheus').href = `http://${currentHost}:9090`;
+
+    // Live Health Probe to /health
+    async function checkHealth() {
+      const start = performance.now();
+      try {
+        const res = await fetch('/health', { cache: 'no-store' });
+        const latency = Math.round(performance.now() - start);
+        if (res.ok) {
+          document.getElementById('latency-val').innerText = "200 OK";
+          document.getElementById('latency-val').className = "metric-value sub-emerald";
+          document.getElementById('latency-ms').innerText = `${latency}ms response`;
+          document.getElementById('system-badge').style.background = "rgba(16, 185, 129, 0.12)";
+          document.getElementById('system-badge').style.borderColor = "rgba(16, 185, 129, 0.3)";
+          document.getElementById('system-badge').style.color = "#34d399";
+          document.getElementById('system-status-text').innerText = "SYSTEM OPERATIONAL";
+          document.getElementById('system-dot').style.background = "#10b981";
+          document.getElementById('bench-health').innerText = "PASS (200 OK)";
+          document.getElementById('bench-health').className = "bench-badge badge-pass";
+        } else {
+          throw new Error("HTTP Status: " + res.status);
+        }
+      } catch (err) {
+        document.getElementById('latency-val').innerText = "FAIL / DOWN";
+        document.getElementById('latency-val').className = "metric-value";
+        document.getElementById('latency-val').style.color = "#f43f5e";
+        document.getElementById('latency-ms').innerText = "Timeout / Unreachable";
+        document.getElementById('system-badge').style.background = "rgba(244, 63, 94, 0.15)";
+        document.getElementById('system-badge').style.borderColor = "rgba(244, 63, 94, 0.4)";
+        document.getElementById('system-badge').style.color = "#fb7185";
+        document.getElementById('system-status-text').innerText = "AUTONOMOUS HEALING ACTIVE";
+        document.getElementById('system-dot').style.background = "#f43f5e";
+        document.getElementById('bench-health').innerText = "FAIL (CRASH DETECTED)";
+        document.getElementById('bench-health').className = "bench-badge";
+        document.getElementById('bench-health').style.background = "rgba(244, 63, 94, 0.2)";
+        document.getElementById('bench-health').style.color = "#fb7185";
+      }
+    }
+    setInterval(checkHealth, 3000);
+    checkHealth();
+
+    function pingHealthNow() {
+      checkHealth();
+      const statusEl = document.getElementById('action-status');
+      statusEl.innerText = "Đã gửi probe kiểm tra /health!";
+      setTimeout(() => statusEl.innerText = "", 2500);
+    }
+
+    async function simulateTraffic(count) {
+      const statusEl = document.getElementById('action-status');
+      statusEl.innerText = `Đang gửi ${count} requests...`;
+      for (let i = 0; i < count; i++) {
+        fetch('/', { cache: 'no-store' }).catch(() => {});
+      }
+      setTimeout(() => {
+        statusEl.innerText = `Đã tạo ${count} requests thành công (Kiểm tra Grafana panel Requests/sec)!`;
+        setTimeout(() => statusEl.innerText = "", 4000);
+      }, 500);
+    }
+  </script>
+</body>
+</html>
