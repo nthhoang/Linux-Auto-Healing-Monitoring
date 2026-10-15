@@ -1,0 +1,38 @@
+groups:
+  - name: server_alerts
+    rules:
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx đang DOWN"
+          description: "nginx-exporter không scrape được stub_status của Nginx trong hơn 15 giây (Nginx thật sự đang down)."
+
+      - alert: NginxExporterDown
+        expr: up{job="nginx"} == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "nginx-exporter không phản hồi"
+          description: "Prometheus không scrape được chính container nginx-exporter (khác với việc Nginx down)."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 85 # CPU_THRESHOLD
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU sử dụng quá cao"
+          description: "CPU đã vượt ngưỡng trong hơn 1 phút."
+
+      - alert: HighMemoryUsage
+        expr: 100 - ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100) > 90
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAM sử dụng quá cao"
+          description: "RAM đã vượt 90% trong hơn 1 phút."
