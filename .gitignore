@@ -1,0 +1,16 @@
+# Secrets & Local Environment Configs
+.env
+scripts/heal.env
+auto_healer/.env
+*.env
+
+# Runtime Credentials Generated from Templates
+alertmanager/alertmanager.yml
+
+# Logs & Temporary Files
+*.log
+*.tmp
+.DS_Store
+__pycache__/
+*.py[cod]
+*$py.class

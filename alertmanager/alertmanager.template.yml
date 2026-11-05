@@ -1,0 +1,36 @@
+global:
+  resolve_timeout: 5m
+
+# Phân công rõ ràng, không trùng lặp:
+#   - Kênh 1 "telegram-alert": Alertmanager báo cho NGƯỜI biết Prometheus phát hiện gì ([ALERT] FIRING / RESOLVED).
+#   - Kênh 2 "auto-healer"   : đẩy sự kiện sang bộ não Tầng 2 để chẩn đoán/xử lý ([AUTO-HEALER] chỉ báo hành động).
+route:
+  receiver: 'telegram-alert'
+  group_by: ['alertname']
+  group_wait: 5s
+  group_interval: 30s
+  repeat_interval: 3h
+  routes:
+    - receiver: 'auto-healer'
+      continue: true
+      repeat_interval: 30s     # còn lỗi thì cứ ~30s gọi lại webhook để auto-healer đếm lượt restart / Circuit Breaker
+    - receiver: 'telegram-alert'
+
+receivers:
+  - name: 'auto-healer'
+    webhook_configs:
+      - url: 'http://auto-healer:5001/webhook'
+        send_resolved: true
+
+  - name: 'telegram-alert'
+    telegram_configs:
+      - bot_token: '__TELEGRAM_BOT_TOKEN__'
+        chat_id: __TELEGRAM_CHAT_ID__
+        parse_mode: 'HTML'
+        send_resolved: true
+        message: |
+          {{ range .Alerts }}{{ if eq .Status "firing" }}🚨 <b>[ALERT] FIRING</b> — <b>{{ .Labels.alertname }}</b>
+          {{ .Annotations.summary }}
+          <i>{{ .Annotations.description }}</i>{{ else }}✅ <b>[ALERT] RESOLVED</b> — <b>{{ .Labels.alertname }}</b>
+          Sự cố đã được khắc phục, chỉ số đã trở lại bình thường.{{ end }}
+          {{ end }}
