@@ -1,6 +1,6 @@
 global:
   scrape_interval: 10s
-  evaluation_interval: 10s
+  evaluation_interval: 5s
 
 alerting:
   alertmanagers:
@@ -20,6 +20,7 @@ scrape_configs:
       - targets: ["nginx-exporter:9113"]
 
   - job_name: "node"
+    scrape_interval: 5s  # Đủ mẫu cho cửa sổ CPU 15s trong demo nhanh.
     static_configs:
       - targets: ["node-exporter:9100"]
 

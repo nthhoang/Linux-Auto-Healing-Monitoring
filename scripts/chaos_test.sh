@@ -5,7 +5,7 @@
 # Mỗi chế độ ứng với 1 "hồi" của buổi demo (xem README.md):
 #   --preflight        Hồi 0  Kiểm tra mọi thứ khỏe trước khi demo
 #   --kill-process     Hồi 1  Container chết -> Tầng 1 (heal.sh) restart nhanh
-#   --stress-cpu [s]   Hồi 2  Quá tải CPU -> cảnh báo, KHÔNG restart
+#   --stress-cpu [s]   Hồi 2  Quá tải CPU (mặc định 50s) -> cảnh báo, KHÔNG restart
 #   --corrupt-config   Hồi 3  Sai cấu hình -> Tầng 2 (auto-healer) RCA + rollback
 #   --corrupt-config --manual
 #                      Hồi 4  Tắt Auto-Heal trên Telegram rồi chạy: người xử lý bằng nút Rollback
@@ -114,25 +114,33 @@ kill_process() {
 # ---------------------------------------------------------------- HỒI 2
 cpu_cleanup() { docker rm -f $(docker ps -aq --filter "name=cpu-burner") > /dev/null 2>&1 || true; }
 stress_cpu() {
-    local duration="${1:-110}" cores
+    local duration="${1:-50}" cores
+    [[ "$duration" =~ ^[1-9][0-9]*$ ]] || { echo "❌ Thời gian ép CPU phải là số nguyên dương (giây)."; return 1; }
     cores=$(nproc 2>/dev/null || echo 2)
     banner "HỒI 2 - QUÁ TẢI CPU (${cores} lõi x ${duration}s) -> cảnh báo, KHÔNG restart"
-    docker image inspect alpine > /dev/null 2>&1 || docker pull -q alpine > /dev/null
+    docker image inspect alpine > /dev/null 2>&1 || docker pull -q alpine > /dev/null || return 1
     trap cpu_cleanup EXIT INT TERM
-    for i in $(seq 1 "$cores"); do
-        docker run -d --rm --name "cpu-burner-$i" alpine sh -c 'while :; do :; done' > /dev/null
-    done
+    # Một container tạo đủ worker để tránh chờ khởi động từng container trên máy nhiều lõi.
+    docker run -d --rm --name cpu-burner alpine sh -c '
+        i=0
+        while [ "$i" -lt "$1" ]; do
+            (while :; do :; done) &
+            i=$((i + 1))
+        done
+        wait
+    ' sh "$cores" > /dev/null || { cpu_cleanup; trap - EXIT INT TERM; return 1; }
     echo "✔ Đã chạy ${cores} tiến trình ngốn CPU lúc $(date '+%H:%M:%S')"
-    look "Dashboard: gauge CPU lên đỏ | Prometheus /alerts: HighCPUUsage Pending -> Firing (cần >85% trong 1 phút)"
+    look "Dashboard: gauge CPU lên đỏ | Prometheus /alerts: HighCPUUsage Pending -> Firing (cửa sổ 15s, vượt ngưỡng liên tục 5s)"
     look "Telegram: [ALERT] FIRING HighCPUUsage, rồi [AUTO-HEALER] CHỈ KHUYẾN NGHỊ (không restart)"
     local start=$SECONDS
     while (( SECONDS - start < duration )); do
-        sleep 10
-        local cpu; cpu=$(prom_value '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)')
+        local remaining=$((duration - (SECONDS - start)))
+        sleep "$((remaining < 5 ? remaining : 5))"
+        local cpu; cpu=$(prom_value '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[15s])) * 100)')
         printf "   t=%3ds  CPU ≈ %.0f%%\n" $((SECONDS - start)) "${cpu:-0}"
     done
     cpu_cleanup; trap - EXIT INT TERM
-    echo "✔ Đã giải phóng CPU. Tin [ALERT] RESOLVED sẽ đến sau khoảng 1-2 phút."
+    echo "✔ Đã giải phóng CPU. Dự kiến [ALERT] RESOLVED sau khoảng 10-20s nếu CPU đã hạ (chưa tính độ trễ Telegram)."
 }
 
 # ---------------------------------------------------------------- HỒI 3 & 4
@@ -196,7 +204,7 @@ usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
 case "$1" in
     --preflight)      preflight ;;
     --kill-process)   kill_process ;;
-    --stress-cpu)     stress_cpu "${2:-110}" ;;
+    --stress-cpu)     stress_cpu "${2:-50}" ;;
     --corrupt-config) corrupt_config "${2:-}" ;;
     --test-chatops)   test_chatops ;;
     -h|--help)        usage ;;

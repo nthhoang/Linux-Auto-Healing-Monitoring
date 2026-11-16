@@ -20,13 +20,13 @@ groups:
           description: "Prometheus không scrape được chính container nginx-exporter (khác với việc Nginx down)."
 
       - alert: HighCPUUsage
-        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 85 # CPU_THRESHOLD
-        for: 1m
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[15s])) * 100) > 85 # CPU_THRESHOLD
+        for: 5s
         labels:
           severity: warning
         annotations:
           summary: "CPU sử dụng quá cao"
-          description: "CPU đã vượt ngưỡng trong hơn 1 phút."
+          description: "CPU trung bình trong cửa sổ 15 giây đã vượt ngưỡng liên tục ít nhất 5 giây."
 
       - alert: HighMemoryUsage
         expr: 100 - ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100) > 90

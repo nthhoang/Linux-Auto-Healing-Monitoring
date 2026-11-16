@@ -11,6 +11,17 @@ route:
   group_interval: 30s
   repeat_interval: 3h
   routes:
+    # CPU demo: gửi nhanh cả FIRING và RESOLVED; giữ nhịp cũ cho các cảnh báo khác.
+    - receiver: 'auto-healer'
+      matchers: ['alertname="HighCPUUsage"']
+      group_wait: 1s
+      group_interval: 5s
+      repeat_interval: 30s
+      continue: true
+    - receiver: 'telegram-alert'
+      matchers: ['alertname="HighCPUUsage"']
+      group_wait: 1s
+      group_interval: 5s
     - receiver: 'auto-healer'
       continue: true
       repeat_interval: 30s     # còn lỗi thì cứ ~30s gọi lại webhook để auto-healer đếm lượt restart / Circuit Breaker
