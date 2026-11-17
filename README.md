@@ -56,33 +56,6 @@ Một công cụ duy nhất: `scripts/chaos_test.sh`. Mỗi chế độ là mộ
 | 3 | `--corrupt-config` | Sai cú pháp `nginx.conf` | Tầng 2 auto-healer | RCA phát hiện `[emerg]` -> rollback |
 | 4 | `--corrupt-config --manual` | Sai cấu hình khi Auto-Heal đã tắt | Con người (nút ChatOps) | Circuit Breaker mở -> bấm Rollback |
 
-### Demo CPU (khoảng 60–70 giây)
-
-`./scripts/chaos_test.sh --stress-cpu` ép tải **50 giây**, sau đó tự dọn tải.
-Prometheus lấy mẫu node mỗi **5 giây**, tính CPU trên cửa sổ **15 giây** và cảnh báo khi vượt ngưỡng
-(mặc định 85%) liên tục **5 giây**. Grafana cũng dùng cửa sổ 15 giây, làm mới mỗi 5 giây.
-Riêng cảnh báo CPU, Alertmanager chờ nhóm 1 giây và cập nhật nhóm mỗi 5 giây để gửi FIRING/RESOLVED nhanh.
-Thông thường cảnh báo xuất hiện trong khoảng 20–30 giây, RESOLVED thêm khoảng 10–20 giây sau khi dọn tải.
-Mục tiêu 60–70 giây tính từ lúc bắt đầu ép tải, với stack đã sẵn sàng và image `alpine` đã tải;
-thực tế còn phụ thuộc tải nền của máy và độ trễ Telegram. Cấu hình này ưu tiên demo nên nhạy với các đợt CPU tăng ngắn.
-
-Nếu stack đã cài trước khi đổi cấu hình, tạo lại cấu hình Alertmanager từ template rồi nạp lại dịch vụ:
-
-```bash
-(
-  set -a
-  source .env
-  set +a
-  sed -e "s|__TELEGRAM_BOT_TOKEN__|${TELEGRAM_BOT_TOKEN}|g" \
-      -e "s|__TELEGRAM_CHAT_ID__|${TELEGRAM_CHAT_ID}|g" \
-      alertmanager/alertmanager.template.yml > alertmanager/alertmanager.yml
-)
-docker compose restart prometheus alertmanager grafana
-./scripts/chaos_test.sh --stress-cpu
-```
-
-Vẫn có thể chọn thời gian khác, ví dụ `--stress-cpu 40` (40 giây ép tải, chưa tính thời gian chờ RESOLVED).
-
 ## ChatOps (Telegram, hai chiều)
 
 Sáu nút: Khởi động lại Nginx · Xem 20 dòng log · Rollback cấu hình · Health Check · Trạng thái container · Bật/Tắt Auto-Heal.
@@ -108,7 +81,7 @@ Còn lại (đã nêu trong báo cáo): auto-healer và Promtail mount `docker.s
 - xem server dang chay http://localhost:8080/
 - xem promethus dang thu thap http://localhost:9090/targets
 - xem promethus alert http://localhost:9090/alerts
-- xem alertmangager localhost:9093
+- xem alertmangager http://localhost:9093
 - xem grafana http://localhost:3000/
 - xem telegram da khoi dong auto-healer 
 
